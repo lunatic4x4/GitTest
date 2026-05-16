@@ -23,7 +23,7 @@ public class TokenService {
         return Base64.getEncoder().encodeToString((dataToSign + ":" + signature).getBytes(StandardCharsets.UTF_8));
     }
 
-    // Validate token function 
+    // Validate token function comment
     public boolean validateToken(String token) throws InvalidTokenException {
         if (token == null || token.trim().isEmpty()) {
             throw new InvalidTokenException("Token cannot be null or empty.");
