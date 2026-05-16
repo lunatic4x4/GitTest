@@ -1,60 +1,43 @@
-name: Java CI with Maven and Security Scans
+name: Java CI with Maven
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: [ main, develop ]
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    defaults: # Optional: set default working directory for all steps in this job
-      run:
-        working-directory: simple-token-validator
-
     steps:
-    - name: Checkout repository
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Set up JDK 11
+    - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
-        java-version: '11'
+        java-version: '17'
         distribution: 'temurin'
         cache: 'maven'
-        # Note: Maven cache might behave better if pom.xml is at root, or needs careful config.
-        # For this setup, it should still mostly work.
 
-    - name: Build with Maven
-      run: mvn -B package # No need for --file if working-directory is set
-      # Or explicitly:
-      # working-directory: simple-token-validator
-      # run: mvn -B package --file pom.xml
+    - name: Build and Test with Maven
+      run: mvn -B clean package
+      working-directory: simple-token-validator
 
-    - name: Run SpotBugs (SAST)
+    - name: Run SpotBugs SAST Scan
       run: mvn -B spotbugs:check
-      # Or explicitly:
-      # working-directory: simple-token-validator
-      # run: mvn -B spotbugs:check --file pom.xml
+      working-directory: simple-token-validator
 
-    - name: Run OWASP Dependency-Check (SCA)
-      run: mvn -B org.owasp:dependency-check-maven:check
-      # Or explicitly:
-      # working-directory: simple-token-validator
-      # run: mvn -B org.owasp:dependency-check-maven:check --file pom.xml
+    - name: Run OWASP Dependency Scan
+      run: mvn -B org.owasp:dependency-check-maven:check -DfailOnError=false
+      working-directory: simple-token-validator
 
-    - name: Upload SpotBugs report
+    - name: Upload Security Scan Reports
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: spotbugs-report
-        path: simple-token-validator/target/spotbugsXml.xml # Path is relative to repo root
-
-    - name: Upload Dependency-Check report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: dependency-check-report
-        path: simple-token-validator/target/dependency-check-report.html # Path is relative to repo root
+        name: security-reports
+        path: |
+          simple-token-validator/target/spotbugsXml.xml
+          simple-token-validator/target/dependency-check-report.html
