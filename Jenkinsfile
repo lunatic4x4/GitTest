@@ -42,8 +42,8 @@ pipeline {
         stage('SAST (SpotBugs)') {
             steps {
                 dir(env.PROJECT_DIR) {
-                    // Force a clean compilation so fresh bytecode exists for SpotBugs to read
-                    sh 'mvn clean compile spotbugs:check || true'
+                    // Force a full clean compilation step so the target/classes directory is populated
+                    sh 'mvn clean compile spotbugs:check'
                 }
             }
             post {
@@ -61,13 +61,14 @@ pipeline {
         stage('SCA (OWASP Dependency-Check)') {
             steps {
                 dir(env.PROJECT_DIR) {
-                    sh 'mvn org.owasp:dependency-check-maven:check || true'
+                    // Force the tool to skip the broken network update and allow the build cycle to generate the report
+                    sh 'mvn org.owasp:dependency-check-maven:check -DautoUpdate=false -DfailOnError=false'
                 }
             }
             post {
                 always {
-                    // Force global lookup pattern to prevent path parsing errors
-                    dependencyCheckPublisher(pattern: '**/target/dependency-check-report.xml')
+                    // Check if a report was generated; skip if empty to avoid breaking the quality gate metrics
+                    dependencyCheckPublisher(pattern: '**/target/dependency-check-report.xml', allowEmptyResults: true)
                     archiveArtifacts artifacts: '**/target/dependency-check-report.html', allowEmptyArchive: true
                 }
             }
