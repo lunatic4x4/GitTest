@@ -1,7 +1,11 @@
 // Jenkinsfile
 
 pipeline {
-    agent any // Or specify a specific agent with required tools
+    agent any 
+
+    tools {
+        maven 'M3'
+    }
 
     environment {
         // Define the sub-project directory for easier reference
@@ -50,15 +54,8 @@ pipeline {
                         tools: [spotBugs(pattern: "${env.PROJECT_DIR}/target/spotbugsXml.xml")],
                         // Let Jenkins decide the build status based on the report:
                         qualityGates: [
-                            // Example: 1 or more HIGH severity SpotBugs issues makes the build UNSTABLE
-                            [threshold: 1, type: 'TOTAL_HIGH', unstable: true],
-                            // Example: 1 or more ERROR severity SpotBugs issues FAILS the build
-                            // (SpotBugs severities are often mapped to ERROR, HIGH, NORMAL, LOW by Warnings NG)
-                            [threshold: 1, type: 'TOTAL_ERROR', failing: true], // Check how FindSecBugs severities are mapped in WarningsNG
-                            // You might need to adjust 'type' based on how SpotBugs/FindSecBugs severities
-                            // are categorized by the Warnings NG plugin (e.g., ERROR, WARNING_HIGH, etc.)
-                            // Consult Warnings NG documentation or experiment.
-                            // For FindSecurityBugs, its "high" issues are often treated as "ERROR" or "HIGH" by Warnings NG.
+                            // 1 or more HIGH severity SpotBugs issues makes the build UNSTABLE
+                            [threshold: 1, type: 'TOTAL', severity: 'HIGH', unstable: true]
                         ]
                     )
                 }
