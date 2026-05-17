@@ -49,7 +49,7 @@ pipeline {
             post {
                 always {
                     recordIssues(
-                        tools: [spotBugs(pattern: "**/target/spotbugsXml.xml")],
+                        tools: [spotBugs(pattern: '**/target/spotbugsXml.xml')],
                         qualityGates: [
                             [threshold: 1, type: 'TOTAL', severity: 'HIGH', unstable: true]
                         ]
@@ -61,13 +61,12 @@ pipeline {
         stage('SCA (OWASP Dependency-Check)') {
             steps {
                 dir(env.PROJECT_DIR) {
-                    // Run the check, using the configuration from pom.xml
                     sh 'mvn org.owasp:dependency-check-maven:check || true'
                 }
             }
             post {
                 always {
-                    // Using the wildcard selector ensures Jenkins finds the XML even if path resolution shifts
+                    // Force global lookup pattern to prevent path parsing errors
                     dependencyCheckPublisher(pattern: '**/target/dependency-check-report.xml')
                     archiveArtifacts artifacts: '**/target/dependency-check-report.html', allowEmptyArchive: true
                 }
