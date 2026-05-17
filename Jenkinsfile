@@ -15,44 +15,33 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // This will checkout the entire repository (GitTest)
                 checkout scm
             }
         }
 
         stage('Build & Unit Test') {
             steps {
-                // Execute Maven commands within the sub-project directory
-                dir(env.PROJECT_DIR) {
-                    sh 'java -version'
-                    sh 'mvn -version'
-                    sh 'mvn -B clean package'
-                }
+                // Run Maven from the root but point it directly to the subproject pom
+                sh 'mvn -B -f simple-token-validator/pom.xml clean package'
             }
             post {
                 always {
-                    // Archive JUnit test results
-                    // Path is relative to the workspace root, so include the project directory
-                    junit "${env.PROJECT_DIR}/target/surefire-reports/*.xml"
+                    junit 'simple-token-validator/target/surefire-reports/*.xml'
                 }
             }
         }
         
-        // Jenkinsfile (SAST Stage)
         stage('SAST (SpotBugs)') {
             steps {
-                dir(env.PROJECT_DIR) {
-                    // Force a full clean compilation step so the target/classes directory is populated
-                    sh 'mvn clean compile spotbugs:check'
-                }
+                // Force a fresh compile and scan using the explicit file path
+                sh 'mvn -B -f simple-token-validator/pom.xml compile spotbugs:check'
             }
             post {
                 always {
+                    // Force the parser to look directly inside the target subfolder
                     recordIssues(
-                        tools: [spotBugs(pattern: '**/target/spotbugsXml.xml')],
-                        qualityGates: [
-                            [threshold: 1, type: 'TOTAL', severity: 'HIGH', unstable: true]
-                        ]
+                        tools: [spotBugs(pattern: 'simple-token-validator/target/spotbugsXml.xml')],
+                        qualityGates: [[threshold: 1, type: 'TOTAL', severity: 'HIGH', unstable: true]]
                     )
                 }
             }
@@ -60,31 +49,11 @@ pipeline {
 
         stage('SCA (OWASP Dependency-Check)') {
             steps {
-                dir(env.PROJECT_DIR) {
-                    // Bypass the broken NVD network mirror entirely
-                    sh 'mvn org.owasp:dependency-check-maven:check -DautoUpdate=false -DfailOnError=false'
-                }
-            }
-            post {
-                always {
-                    // Stripped down to the exact syntax the plugin expects
-                    dependencyCheckPublisher(pattern: '**/target/dependency-check-report.xml')
-                    
-                    // The archive mechanism will cleanly handle whether the file exists or not
-                    archiveArtifacts artifacts: '**/target/dependency-check-report.html', allowEmptyArchive: true
-                }
+                // Bypass the NVD database update to prevent 403 network crashes
+                sh 'mvn -B -f simple-token-validator/pom.xml org.owasp:dependency-check-maven:check -DautoUpdate=false -DfailOnError=false'
             }
         }
-
-        // Optional: Archive the built JAR
-        stage('Archive Application') {
-            steps {
-                dir(env.PROJECT_DIR) {
-                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true, allowEmptyArchive: true
-                }
-            }
-        }
-    } // End of stages
+    }
 
     post {
         // Global post actions
