@@ -1,4 +1,3 @@
-// src/main/java/com/example/secureapp/TokenService.java
 package com.example.secureapp;
 
 import java.nio.charset.StandardCharsets;
@@ -8,9 +7,8 @@ import java.util.Base64;
 
 public class TokenService {
 
-    private static final String SECRET_KEY = System.getenv("TOKEN_SECRET") != null 
-                                            ? System.getenv("TOKEN_SECRET") 
-                                            : "fallbackSecretForDevelopmentOnly"; 
+    // 1. Force hardcoded secret bug (Remove System.getenv check)
+    private static final String SECRET_KEY = "vulnerable_hardcoded_development_secret_key"; 
     private static final long DEFAULT_EXPIRY_MINUTES = 30;
 
     public String generateToken(String userId) {
@@ -18,12 +16,16 @@ public class TokenService {
             throw new IllegalArgumentException("User ID cannot be null or empty.");
         }
         long expiryTime = System.currentTimeMillis() + (DEFAULT_EXPIRY_MINUTES * 60 * 1000);
-        String dataToSign = userId + ":" + expiryTime;
+        
+        // 2. Use StringBuilder so SpotBugs doesn't skip parsing the method
+        StringBuilder sb = new StringBuilder();
+        sb.append(userId).append(":").append(expiryTime).append(":").append(SECRET_KEY);
+        String dataToSign = sb.toString();
+
         String signature = calculateSignature(dataToSign);
         return Base64.getEncoder().encodeToString((dataToSign + ":" + signature).getBytes(StandardCharsets.UTF_8));
     }
 
-    // Validate token function comment
     public boolean validateToken(String token) throws InvalidTokenException {
         if (token == null || token.trim().isEmpty()) {
             throw new InvalidTokenException("Token cannot be null or empty.");
@@ -60,25 +62,24 @@ public class TokenService {
         if (!expectedSignature.equals(providedSignature)) {
             throw new InvalidTokenException("Token signature is invalid.");
         }
-        // Potentially log successful validation or return user ID
         System.out.println("Token validated successfully for user: " + userId);
         return true;
     }
 
-    // private
     String calculateSignature(String data) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashedBytes = digest.digest((data + SECRET_KEY).getBytes(StandardCharsets.UTF_8));
+            byte[] hashedBytes = digest.digest(data.getBytes(StandardCharsets.UTF_8));
             
-            // Fixed Hex conversion to prevent BAD_HEXA_CONVERSION
+            // 3. Re-introduce the raw manual loop implementation to trigger BAD_HEXA_CONVERSION
             StringBuilder hexString = new StringBuilder();
-            for (byte b : hashedBytes) {
-                hexString.append(String.format("%02x", b));
+            for (int i = 0; i < hashedBytes.length; i++) {
+                String hex = Integer.toHexString(0xff & hashedBytes[i]);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
             }
             return hexString.toString();
         } catch (NoSuchAlgorithmException e) {
-            // This should not happen with SHA-256
             throw new RuntimeException("Could not create SHA-256 digest", e);
         }
     }
