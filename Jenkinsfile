@@ -61,14 +61,16 @@ pipeline {
         stage('SCA (OWASP Dependency-Check)') {
             steps {
                 dir(env.PROJECT_DIR) {
-                    // Force the tool to skip the broken network update and allow the build cycle to generate the report
+                    // Bypass the broken NVD network mirror entirely
                     sh 'mvn org.owasp:dependency-check-maven:check -DautoUpdate=false -DfailOnError=false'
                 }
             }
             post {
                 always {
-                    // Check if a report was generated; skip if empty to avoid breaking the quality gate metrics
-                    dependencyCheckPublisher(pattern: '**/target/dependency-check-report.xml', allowEmptyResults: true)
+                    // Stripped down to the exact syntax the plugin expects
+                    dependencyCheckPublisher(pattern: '**/target/dependency-check-report.xml')
+                    
+                    // The archive mechanism will cleanly handle whether the file exists or not
                     archiveArtifacts artifacts: '**/target/dependency-check-report.html', allowEmptyArchive: true
                 }
             }
