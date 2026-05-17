@@ -42,19 +42,15 @@ pipeline {
         stage('SAST (SpotBugs)') {
             steps {
                 dir(env.PROJECT_DIR) {
-                    // Maven will now complete this step and generate the report,
-                    // even if SpotBugs finds issues, due to failOnError=false in pom.xml.
-                    // The '|| true' is less critical now but harmless.
-                    sh 'mvn -B spotbugs:check || true'
+                    // Force a clean compilation so fresh bytecode exists for SpotBugs to read
+                    sh 'mvn clean compile spotbugs:check || true'
                 }
             }
             post {
                 always {
                     recordIssues(
-                        tools: [spotBugs(pattern: "${env.PROJECT_DIR}/target/spotbugsXml.xml")],
-                        // Let Jenkins decide the build status based on the report:
+                        tools: [spotBugs(pattern: "**/target/spotbugsXml.xml")],
                         qualityGates: [
-                            // 1 or more HIGH severity SpotBugs issues makes the build UNSTABLE
                             [threshold: 1, type: 'TOTAL', severity: 'HIGH', unstable: true]
                         ]
                     )
@@ -65,21 +61,15 @@ pipeline {
         stage('SCA (OWASP Dependency-Check)') {
             steps {
                 dir(env.PROJECT_DIR) {
-                    // OWASP Dependency-Check is also configured in pom.xml
-                    // Use '|| true' for the same reason as SpotBugs
-                    sh 'mvn -B org.owasp:dependency-check-maven:check || true'
+                    // Run the check, using the configuration from pom.xml
+                    sh 'mvn org.owasp:dependency-check-maven:check || true'
                 }
             }
             post {
                 always {
-                    // Use the OWASP Dependency-Check Jenkins Plugin for reporting
-                    dependencyCheckPublisher(
-                        pattern: "${env.PROJECT_DIR}/target/dependency-check-report.xml"
-                        // Configure failure thresholds in the Jenkins plugin's global or job configuration
-                        // or rely on the pom.xml's <failBuildOnCVSS>
-                    )
-                    // Archive HTML report for easy viewing
-                    archiveArtifacts artifacts: "${env.PROJECT_DIR}/target/dependency-check-report.html", allowEmptyArchive: true
+                    // Using the wildcard selector ensures Jenkins finds the XML even if path resolution shifts
+                    dependencyCheckPublisher(pattern: '**/target/dependency-check-report.xml')
+                    archiveArtifacts artifacts: '**/target/dependency-check-report.html', allowEmptyArchive: true
                 }
             }
         }
