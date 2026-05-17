@@ -7,7 +7,7 @@ import java.util.Base64;
 
 public class TokenService {
 
-    // 1. Force hardcoded secret bug (Remove System.getenv check)
+    // VULNERABILITY 1: Pure hardcoded string literal to trigger SpotBugs security flag
     private static final String SECRET_KEY = "vulnerable_hardcoded_development_secret_key"; 
     private static final long DEFAULT_EXPIRY_MINUTES = 30;
 
@@ -17,13 +17,17 @@ public class TokenService {
         }
         long expiryTime = System.currentTimeMillis() + (DEFAULT_EXPIRY_MINUTES * 60 * 1000);
         
-        // 2. Use StringBuilder so SpotBugs doesn't skip parsing the method
+        // Use StringBuilder to bypass modern Java 11+ 'makeConcatWithConstants' optimization
         StringBuilder sb = new StringBuilder();
-        sb.append(userId).append(":").append(expiryTime).append(":").append(SECRET_KEY);
+        sb.append(userId).append(":").append(expiryTime);
         String dataToSign = sb.toString();
 
         String signature = calculateSignature(dataToSign);
-        return Base64.getEncoder().encodeToString((dataToSign + ":" + signature).getBytes(StandardCharsets.UTF_8));
+        
+        StringBuilder finalToken = new StringBuilder();
+        finalToken.append(dataToSign).append(":").append(signature);
+        
+        return Base64.getEncoder().encodeToString(finalToken.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     public boolean validateToken(String token) throws InvalidTokenException {
@@ -56,12 +60,16 @@ public class TokenService {
             throw new InvalidTokenException("Token has expired.");
         }
 
-        String dataToSign = userId + ":" + expiryTime;
+        StringBuilder sb = new StringBuilder();
+        sb.append(userId).append(":").append(expiryTime);
+        String dataToSign = sb.toString();
+        
         String expectedSignature = calculateSignature(dataToSign);
 
         if (!expectedSignature.equals(providedSignature)) {
             throw new InvalidTokenException("Token signature is invalid.");
         }
+        
         System.out.println("Token validated successfully for user: " + userId);
         return true;
     }
@@ -69,13 +77,20 @@ public class TokenService {
     String calculateSignature(String data) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashedBytes = digest.digest(data.getBytes(StandardCharsets.UTF_8));
             
-            // 3. Re-introduce the raw manual loop implementation to trigger BAD_HEXA_CONVERSION
+            // Append the hardcoded secret key to data inside a StringBuilder to ensure scan visibility
+            StringBuilder sb = new StringBuilder();
+            sb.append(data).append(SECRET_KEY);
+            
+            byte[] hashedBytes = digest.digest(sb.toString().getBytes(StandardCharsets.UTF_8));
+            
+            // VULNERABILITY 2: Re-introduced raw manual bit-masking loop to trigger BAD_HEXA_CONVERSION
             StringBuilder hexString = new StringBuilder();
             for (int i = 0; i < hashedBytes.length; i++) {
                 String hex = Integer.toHexString(0xff & hashedBytes[i]);
-                if (hex.length() == 1) hexString.append('0');
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
                 hexString.append(hex);
             }
             return hexString.toString();
